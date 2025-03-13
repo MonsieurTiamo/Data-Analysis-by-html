@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moonback 数据查看</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        #main, #engagement { width: 100%; height: 600px; margin: 20px 0; }
+        .header { text-align: center; margin: 20px 0; }
+        #exportBtn { 
+            padding: 10px 20px; 
+            background: #4CAF50; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer;
+            margin-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <input type="file" id="fileInput" />
+        <button id="exportBtn" disabled>导出报告</button>
+        <p id="hint-text">可爱鬼，请你看数据，记得要天天开心！</p>
+    </div>
+    <div id="main"></div>
+    <div id="engagement"></div>
+    <script>
+        let currentData = null; // 存储当前数据
+
+        // 初始化事件监听
+        document.getElementById('fileInput').addEventListener('change', handleFile, false);
+        document.getElementById('exportBtn').addEventListener('click', exportReport);
+
+        function handleFile(event) {
+        // 获取用户上传的第一个文件
+        const file = event.target.files[0];
+
+        // 创建一个新的 FileReader 对象，用于读取文件内容
+        const reader = new FileReader();
+
+        // 定义 onload 事件处理函数，当文件读取完成后执行
+        reader.onload = (e) => {
+            // 将读取的结果转换为 Uint8Array
+            const data = new Uint8Array(e.target.result);
+
+            // 使用 XLSX 库读取工作簿，指定类型为 'array'
+            const workbook = XLSX.read(data, { type: 'array' });
+
+            // 获取工作簿中的第一个工作表
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+
+            // 将工作表数据转换为 JSON 格式
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+            // 将解析后的 JSON 数据存储到当前数据变量中
+            currentData = jsonData;
+
+            // 启用导出按钮，允许用户导出报告
+            document.getElementById('exportBtn').disabled = false;
+
+            // 调用渲染图表的函数，使用解析后的 JSON 数据
+            renderCharts(jsonData);
+        };
+
+        // 以 ArrayBuffer 方式读取用户上传的文件
+        reader.readAsArrayBuffer(file);
+}
+
+//         function processData(data) {
+//             return data.map(item => ({
+//                 ...item,
+//                 // 提取日期中的"日"（假设日期字段为4位数字字符串，如0115表示1月15日）
+//                 displayDate: item['日期'] ? 
+//                     item['日期'].toString().slice(-2) : // 取最后两位
+//                     ''
+//             }));
+// }
+
+        function renderCharts(data) {
+
+            // 处理原始数据
+            //const data = processData(data); // 新增数据处理步骤
+    
+            // 生成日期标签数组
+            //const dates = data.map(item => item.displayDate); // 使用处理后的日期字段
+
+            const youtubeUrls = data.map(item => item['Youtube链接']); 
+            // 遍历 data 数组中的每一个对象，从每个对象中提取 'Youtube链接' 属性的值。将这些值组成一个新数组，并赋值给 youtubeUrls。
+            const tkUrls = data.map(item => item['TK链接']);
+            const insUrls = data.map(item => item['Ins链接']);
+            const youtubeViews = data.map(item => item['Youtube曝光']);
+            const tkViews = data.map(item => item['TK曝光']);
+            const insViews = data.map(item => item['Ins曝光']);
+            const youtubeLikes = data.map(item => item['Youtube点赞']);
+            const tkLikes = data.map(item => item['TK点赞']);
+            const insLikes = data.map(item => item['Ins点赞']);
+            const youtubeComments = data.map(item => item['Youtube评论']);
+            const tkComments = data.map(item => item['TK评论']);
+            const insComments = data.map(item => item['Ins评论']);
+            const dates = data.map(item => item['日期']); // 提取“日期”列
+
+            const youtubeEngagement = youtubeLikes.map((like, index) => like + youtubeComments[index]);
+            const tkEngagement = tkLikes.map((like, index) => like + tkComments[index]);
+            const insEngagement = insLikes.map((like, index) => like + insComments[index]);
+
+            // 绘制曝光量图表
+            // 获取 HTML 中 ID 为 'main' 的元素，通常是用于显示图表的容器
+            const chartDom = document.getElementById('main');
+
+            // 使用 ECharts 库初始化该容器，创建一个新的图表实例
+            const myChart = echarts.init(chartDom);
+
+            const option1 = {
+                title: {
+                    text: '平台曝光趋势',
+                    subtext: '可爱鬼，请你看数据，记得要天天开心！',
+                    left: 'center'
+                },
+                tooltip: {
+                                    trigger: 'axis', // 触发方式：'axis' 表示鼠标悬停时显示整个轴的数据点
+                    formatter: function (params) {
+                        // params 是一个数组，包含所有系列在当前数据点的信息
+                        // 每个元素对应一个系列（如 YouTube、TikTok、Instagram）的数据
+
+                        let tooltipContent = ''; // 初始化提示内容为空字符串
+
+                        // 遍历 params 数组，处理每个系列的数据
+                        params.forEach(param => {
+                            const index = param.dataIndex; // 当前数据点的索引
+                            const seriesName = param.seriesName; // 当前系列的名称（如 YouTube）
+                            const value = param.value; // 当前系列在当前数据点的值
+
+                            // 将系列名称和值添加到提示内容中
+                            tooltipContent += `${seriesName}: ${value}<br/>`;
+                        });
+
+                        // 添加额外的提示信息，告诉用户可以点击数据点以访问视频
+                        tooltipContent += '点击对应位置以访问视频';
+
+                        // 返回最终的提示内容
+                        return tooltipContent;
+                    }
+                },
+                legend: {
+                    data: ['YouTube', 'TikTok', 'Instagram'],
+                    right: '10%',  // 从右侧的距离
+                    top: '10%' 
+                },
+                xAxis: {
+                        type: 'category',
+                data: dates, // 使用处理后的日期数组
+                axisLabel: {
+                    rotate: 45, // 标签旋转
+                    formatter: function (value) {
+                        return value ; // 可选：添加"日"后缀 (显示为15日)
+                    }
+            }
+                },
+                yAxis: {
+                    type: 'value'
+                },
+                series: [
+                    {
+                        name: 'YouTube',
+                        type: 'line',
+                        data: youtubeViews,
+                        emphasis: {
+                            focus: 'series'
+                        }
+                        //这个设置表示当用户将鼠标悬停在图表的某个数据点上时，整个系列（即与该数据点相关的所有数据点）会被高亮显示。
+                    },
+                    {
+                        name: 'TikTok',
+                        type: 'line',
+                        data: tkViews,
+                        emphasis: {
+                            focus: 'series'
+                        }
+                    },
+                    {
+                        name: 'Instagram',
+                        type: 'line',
+                        data: insViews,
+                        emphasis: {
+                            focus: 'series'
+                        }
+                    }
+                ]
+            };
+
+            myChart.setOption(option1);
+
+            // 添加点击事件，直接跳转到视频
+            myChart.on('click', function (params) {
+                                // 获取当前数据点的索引
+                    const index = params.dataIndex;
+
+                // 获取当前系列的名称
+                const seriesName = params.seriesName;
+
+                // 根据系列名称获取对应的 URL
+                let url = '';
+                switch (seriesName) {
+                    case 'YouTube':
+                        url = youtubeUrls[index];
+                        break;
+                    case 'TikTok':
+                        url = tkUrls[index];
+                        break;
+                    case 'Instagram':
+                        url = insUrls[index];
+                        break;
+                }
+
+                // 如果 URL 存在，则在新标签页中打开
+                if (url) {
+                    window.open(url, '_blank');
+                } else {
+                    console.warn('未找到对应的 URL:', { seriesName, index });
+                }
+            });
+
+            // 绘制互动量图表
+            const engagementDom = document.getElementById('engagement');
+            const engagementChart = echarts.init(engagementDom);
+
+            const option2 = {
+                title: {
+                    text: '平台互动量趋势',
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'axis', // 触发方式：'axis' 表示鼠标悬停时显示整个轴的数据点
+                    formatter: function (params) {
+                        // params 是一个数组，包含所有系列在当前数据点的信息
+                        // 每个元素对应一个系列（如 YouTube、TikTok、Instagram）的数据
+
+                        let tooltipContent = ''; // 初始化提示内容为空字符串
+
+                        // 遍历 params 数组，处理每个系列的数据
+                        params.forEach(param => {
+                            const index = param.dataIndex; // 当前数据点的索引
+                            const seriesName = param.seriesName; // 当前系列的名称（如 YouTube）
+                            const value = param.value; // 当前系列在当前数据点的值
+
+                            // 将系列名称和值添加到提示内容中
+                            tooltipContent += `${seriesName}: ${value}<br/>`;
+                        });
+
+                        // 添加额外的提示信息，告诉用户可以点击数据点以访问视频
+                        tooltipContent += '点击对应位置以访问视频';
+
+                        // 返回最终的提示内容
+                        return tooltipContent;
+                    }
+                },
+                legend: {
+                    data: ['YouTube互动', 'TikTok互动', 'Instagram互动'],
+                    right: '10%',  // 从右侧的距离
+                    top: '10%' 
+                },
+                xAxis: {
+                        type: 'category',
+                data: dates, // 使用处理后的日期数组
+                axisLabel: {
+                    rotate: 45, // 标签旋转
+                    formatter: function (value) {
+                        return value; // 可选：添加"日"后缀 (显示为15日)
+                    }
+            }
+                },
+                yAxis: {
+                    type: 'value'
+                },
+                series: [
+                    {
+                        name: 'YouTube互动',
+                        type: 'line',
+                        data: youtubeEngagement,
+                        emphasis: {
+                            focus: 'series'
+                        }
+                    },
+                    {
+                        name: 'TikTok互动',
+                        type: 'line',
+                        data: tkEngagement,
+                        emphasis: {
+                            focus: 'series'
+                        }
+                    },
+                    {
+                        name: 'Instagram互动',
+                        type: 'line',
+                        data: insEngagement,
+                        emphasis: {
+                            focus: 'series'
+                        }
+                    }
+                ]
+            };
+
+            engagementChart.setOption(option2);
+
+            // 添加点击事件，直接跳转到视频
+        engagementChart.on('click', function (params) {
+        const index = params.dataIndex;
+        let url = '';
+        // 处理系列名称中的"互动"后缀
+        const platform = params.seriesName.replace('互动', '');
+        switch (platform) {
+            case 'YouTube':
+                url = youtubeUrls[index];
+                break;
+            case 'TikTok':
+                url = tkUrls[index];
+                break;
+            case 'Instagram':
+                url = insUrls[index];
+                break;
+        }
+        if (url) {
+            window.open(url, '_blank');
+        }
+    });
+        }
+
+        // 新增导出功能
+        function exportReport() {
+            if (!currentData) return;
+
+            const template = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Moonback 数据报告</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"><\/script>
+    <style>
+        #main, #engagement { width: 100%; height: 600px; margin: 20px 0; }
+        .header { text-align: center; margin: 20px 0; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h3>Moonback 运营数据报告</h3>
+        <p>数据生成时间：${new Date().toLocaleString()}</p>
+    </div>
+    <div id="main"></div>
+    <div id="engagement"></div>
+    <script>
+        // 嵌入原始数据
+        const data = ${JSON.stringify(currentData)};
+
+        // 嵌入渲染函数
+        ${renderCharts.toString()}
+
+        // 初始化渲染
+        renderCharts(data);
+    <\/script>
+</body>
+</html>`;
+
+            // 创建下载链接
+            const blob = new Blob([template], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'data_report.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
